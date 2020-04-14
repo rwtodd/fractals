@@ -23,7 +23,15 @@
                    (+ x (- xsq ysq))
                    (+ y tmp tmp))))))))
 
+(defn- split-into-ranges
+  "splits `n` into `rsize`-sized ranges covering 0 to `n`"
+  [n rsize]
+  (let [rs (range 0 n rsize)]
+    (map range rs (concat (rest rs) [n]))))
+
 (defn fill-image
+  "Fill a `BufferedImage` `img` with a picture of a fractal `alg` in
+  the color scheme `scheme` with `coords` defined as `[xmin xmax ymin ymax]`"  
   [^BufferedImage img ^Algorithm alg scheme coords]
   (let [xmax (.getWidth img)
         ymax (.getHeight img)
@@ -32,12 +40,15 @@
         algy-min (nth coords 2)
         y-scale (/ (- (nth coords 3) algy-min) ymax)
         color-scale (/ (colors/depth scheme) (.fidelity alg))]
-    (doseq [y (range ymax),  x (range xmax)]
-      (let [algx  (+ algx-min (* x x-scale))
-            algy  (+ algy-min (* y y-scale))
-            ptval (.point alg algx algy)
-            scaled (int (*  ptval color-scale))]
-        (.setRGB img x y (colors/get-color scheme scaled))))
+    (dorun
+     (pmap (fn [yrange]
+             (doseq [y yrange,  x (range xmax)]
+               (let [algx  (+ algx-min (* x x-scale))
+                     algy  (+ algy-min (* y y-scale))
+                     ptval (.point alg algx algy)
+                     scaled (int (*  ptval color-scale))]
+                 (.setRGB img x y (colors/get-color scheme scaled)))))
+           (split-into-ranges ymax 50)))
     img))
 
 (comment  
