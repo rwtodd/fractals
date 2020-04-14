@@ -1,4 +1,4 @@
-(defproject fractals "0.1.0-SNAPSHOT"
+(defproject org.rwtodd/fractals "0.1.0"
   :description "Clojure program to have fun exploring fractals"
   :url "http://github.com/rwtodd/fractals"
   :license {:name "MIT"
