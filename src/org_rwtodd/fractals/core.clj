@@ -1,7 +1,8 @@
 (ns org-rwtodd.fractals.core
-  (:import (javax.swing JFrame JLabel JMenuBar)
+  (:import (javax.swing JFrame JLabel JMenuBar ImageIcon SwingUtilities)
            (java.awt Color)
-           (java.awt.image BufferedImage))
+           (java.awt.image BufferedImage)
+           (java.awt.event MouseAdapter MouseEvent))
   (:require [org-rwtodd.fractals.colors :as colors]
             [org-rwtodd.fractals.algo :as algo])
   (:gen-class))
@@ -56,7 +57,17 @@
                    :center [x y],
                    :size (let [[a b] (:size s)]
                            [(* scale a) (* scale b)]))))))
-  
+
+(defn recenter-on-img!
+  [x y scale]
+  (let [st @app-state
+        [cx cy] (:center st)
+        [szx szy] (:size st)
+        [imwid imht] (:image-size st)
+        newx (- cx (- szx (* (/ (double x) imwid) 2 szx)))
+        newy (- cy (- szy (* (/ (double y) imht) 2 szy)))]
+    (recenter! newx newy scale)))
+
 (defn change-inputs!
   "Update the global state's existing keys with any provided."
   [& kvs]
@@ -67,9 +78,24 @@
 (defn generate-frame
   "Start the main frame--must be called from swing thread"
   []
-  ())
+  (generate-img)
+  (let [frm (JFrame. "Fractals")
+        icon (ImageIcon. (:image @app-state))
+        lbl (JLabel. icon)]
+    (.addMouseListener lbl
+                       (proxy [MouseAdapter] []
+                         (mousePressed [event]
+                           (recenter-on-img! (.getX event)
+                                             (.getY event)
+                                             0.5)
+                           (generate-img)
+                           (.repaint lbl))))
+    (.add frm lbl)
+    (.pack frm)
+    (.show frm)))
 
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
+  (SwingUtilities/invokeLater generate-frame))
+
