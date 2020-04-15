@@ -26,6 +26,52 @@
                    (+ x (- xsq ysq))
                    (+ y tmp tmp))))))))
 
+(deftype JuliaSquared [depth esc addX addY]
+  Algorithm
+  (fidelity [_] depth)
+  (point [_ x y]
+    (loop [ans (dec depth)
+           cx x
+           cy y]
+      (let [xsq (* cx cx)
+            ysq (* cy cy)]
+        (if (or (zero? ans) (< esc (+ xsq ysq)))
+          ans
+          (let [tmp (* cx cy)]
+            (recur (dec ans)
+                   (+ addX (- xsq ysq))
+                   (+ addY tmp tmp))))))))
+
+(deftype JuliaExp [depth esc addX addY]
+  Algorithm
+  (fidelity [_] depth)
+  (point [_ x y]
+    (loop [ans (dec depth)
+           cx x
+           cy y]
+      (if (or (zero? ans) (< esc (+ (* cx cx) (* cy cy))))
+        ans
+        (let [tmp (Math/exp cx)]
+          (recur (dec ans)
+                 (+ addX (* tmp (Math/cos cy)))
+                 (+ addY (* tmp (Math/sin cy)))))))))
+
+(deftype JuliaZExp [depth esc addX addY]
+  Algorithm
+  (fidelity [_] depth)
+  (point [_ x y]
+    (loop [ans (dec depth)
+           cx x
+           cy y]
+      (if (or (zero? ans) (< esc (+ (* cx cx) (* cy cy))))
+        ans
+        (let [tmp (Math/exp cx)
+              expr (* tmp (Math/cos cy))
+              expi (* tmp (Math/sin cy))]
+          (recur (dec ans)
+                 (+ addX (- (* cx expr) (* cy expi)))
+                 (+ addY (* cx expi) (* cy expr))))))))
+
 (defn- split-into-ranges
   "splits `n` into `rsize`-sized ranges covering 0 to `n`"
   [n rsize]
