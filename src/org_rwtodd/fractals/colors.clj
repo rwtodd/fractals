@@ -112,7 +112,7 @@
   "Define a `ColorScheme` that interpolates across many colors. If only one color is
   given, then transition from BLACK to the color."
   ([n color]
-   (monochrome-scheme n color))
+   (monochrome-scheme n (to-color color)))
   
   ([n color-a & colors]
    (let [grads    (partition 2 1 (map to-color (cons color-a colors)))

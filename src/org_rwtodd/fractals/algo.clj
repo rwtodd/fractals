@@ -7,6 +7,9 @@
   (^int fidelity [])
   (^int point [^double x ^double y]))
 
+;; ~~~~ START faster math for this part of the file ~~~
+(set! *unchecked-math* true)
+
 (deftype Mandelbrot [depth esc]
   Algorithm
   (fidelity [_] depth)
@@ -31,14 +34,15 @@
 
 (defn fill-image
   "Fill a `BufferedImage` `img` with a picture of a fractal `alg` in
-  the color scheme `scheme` with `coords` defined as `[xmin xmax ymin ymax]`"  
-  [^BufferedImage img ^Algorithm alg scheme coords]
+  the color scheme `scheme` for the coordinates given in the
+  map."
+  [^BufferedImage img ^Algorithm alg scheme
+   {^double algx-min :xmin ^double algx-max :xmax
+    ^double algy-min :ymin ^double algy-max :ymax}]
   (let [xmax (.getWidth img)
         ymax (.getHeight img)
-        algx-min (nth coords 0)
-        x-scale (/ (- (nth coords 1) algx-min) xmax)
-        algy-min (nth coords 2)
-        y-scale (/ (- (nth coords 3) algy-min) ymax)
+        x-scale (/ (- algx-max algx-min) xmax)
+        y-scale (/ (- algy-max algy-min) ymax)
         color-scale (/ (colors/depth scheme) (.fidelity alg))]
     (dorun
      (pmap (fn [yrange]
@@ -51,13 +55,6 @@
            (split-into-ranges ymax 50)))
     img))
 
-(comment  
-(let [img (BufferedImage. 800 800 BufferedImage/TYPE_INT_RGB)
-      alg (Mandelbrot. 256 4.0)
-      cs   (colors/vectorize-scheme
-            (colors/combine-schemes java.awt.Color/BLACK
-                                    (colors/gradient-scheme 255 java.awt.Color/RED
-                                                            java.awt.Color/YELLOW
-                                                            java.awt.Color/BLUE)))]
-  (fill-image img alg cs [-1.395 -1.39 -0.015 -0.005]))
-)
+;; ~~~~ END faster math for this part of the file ~~~
+(set! *unchecked-math* false)
+
