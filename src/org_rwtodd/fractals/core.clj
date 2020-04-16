@@ -1,8 +1,10 @@
 (ns org-rwtodd.fractals.core
-  (:import (javax.swing JFrame JLabel JMenuBar ImageIcon SwingUtilities)
-           (java.awt Color)
+  (:import (javax.swing JFrame JLabel JMenuBar ImageIcon
+                        SwingUtilities JMenu JMenuItem
+                        JRadioButtonMenuItem ButtonGroup)
+           (java.awt Color BorderLayout)
            (java.awt.image BufferedImage)
-           (java.awt.event MouseAdapter MouseEvent))
+           (java.awt.event MouseAdapter ActionListener))
   (:require [org-rwtodd.fractals.colors :as colors]
             [org-rwtodd.fractals.algo :as algo])
   (:gen-class))
@@ -17,7 +19,13 @@
    :center [-0.5 0.0]
    :size [1.0 1.0]
    :image-size [300 300]
+   :click-scale 1.0
    })
+
+(defn- state-string
+  "Write the important state from `st` to an edn string, returning it."
+  [st]
+  (pr-str (select-keys st #{:in-fractal :in-scheme :center :size :image-size})))
 
 (defn- evaluate-state
   "fill out the application state by evaluating the inputs."
@@ -35,7 +43,7 @@
 
 (def app-state (atom (evaluate-state starter-spec)))
 
-(defn generate-img
+(defn generate-image
   []
   (let [st @app-state
         [cx cy]    (:center st)
@@ -43,7 +51,6 @@
     (algo/fill-image (:image st) (:fractal st) (:scheme st)
                      {:xmin (- cx szx) :xmax (+ cx szx)
                       :ymin (- cy szy) :ymax (+ cy szy)})))
-
 
 (defn recenter!
   "Adjust the global state for a new center `x` and `y`, with optional
@@ -58,41 +65,96 @@
                    :size (let [[a b] (:size s)]
                            [(* scale a) (* scale b)]))))))
 
-(defn recenter-on-img!
-  [x y scale]
+(defn recenter-on-image!
+  [x y]
   (let [st @app-state
         [cx cy] (:center st)
         [szx szy] (:size st)
         [imwid imht] (:image-size st)
         newx (- cx (- szx (* (/ (double x) imwid) 2 szx)))
         newy (- cy (- szy (* (/ (double y) imht) 2 szy)))]
-    (recenter! newx newy scale)))
+    (recenter! newx newy (:click-scale st))))
 
 (defn change-inputs!
   "Update the global state's existing keys with any provided."
   [& kvs]
   (swap! app-state
          (fn [s]
-           (evaluate-state (apply assoc s kvs)))))
+           (evaluate-state (apply assoc s kvs))))
+  (let [st @app-state]
+    (if-let [frm (:swing-frame st)]
+      (do
+        (generate-image)
+        (.setIcon (:swing-label st) (ImageIcon. (:image st)))
+        (doto frm .pack .repaint)))))
+
+(defn- create-file-menu
+  "Create the file options in a `File` menu, and return it."
+  []
+  (let [mm (JMenu. "File")
+        save (JMenuItem. "Save")
+        load (JMenuItem. "Load")]
+    (doto mm (.add save) (.add load))))
     
+(defn- create-scale-menu
+  "Create the zooming options in a `Scale` menu, and return it."
+  []
+  (let [mm (JMenu. "Scale")
+        zi (JRadioButtonMenuItem. "Zoom In")
+        zo (JRadioButtonMenuItem. "Zoom Out")
+        nz (JRadioButtonMenuItem. "No Zoom" true)
+        bgrp (ButtonGroup.)
+        zooms (reify ActionListener
+                (actionPerformed [_ ae]
+                  (swap! app-state assoc
+                         :click-scale
+                         (case (.getActionCommand ae)
+                           "Zoom In" 0.5
+                           "Zoom Out" 2.0
+                           "No Zoom" 1.0
+                           1.0))))]
+    (.addActionListener zi zooms)
+    (.addActionListener zo zooms)
+    (.addActionListener nz zooms)
+    (doto bgrp (.add zi) (.add nz) (.add zo))
+    (doto mm (.add zi) (.add nz) (.add zo))))
+
+(defn- add-menus
+  "Put the menu items on the frame"
+  [frm]
+  (let [m (JMenuBar.)
+        fmenu (create-file-menu)
+        smenu (create-scale-menu)]
+    (doto m (.add fmenu) (.add smenu))
+    (.setJMenuBar frm m)))
+
+(defn- click-handler
+  "handle clicks on the main frame"
+  [x y]
+  (recenter-on-image! x y)
+  (generate-image))
+
 (defn generate-frame
   "Start the main frame--must be called from swing thread"
   []
-  (generate-img)
+  (generate-image)
   (let [frm (JFrame. "Fractals")
+        pane (.getContentPane frm)
         icon (ImageIcon. (:image @app-state))
         lbl (JLabel. icon)]
+    (swap! app-state assoc
+           :swing-frame frm
+           :swing-label lbl
+           :click-scale 1.0)
+    (add-menus frm)
     (.addMouseListener lbl
                        (proxy [MouseAdapter] []
                          (mousePressed [event]
-                           (recenter-on-img! (.getX event)
-                                             (.getY event)
-                                             0.5)
-                           (generate-img)
+                           (click-handler (.getX event) (.getY event))
                            (.repaint lbl))))
-    (.add frm lbl)
-    (.pack frm)
-    (.show frm)))
+    (.setLayout pane (BorderLayout.))
+    (.add pane lbl)
+    (doto frm .pack (.setVisible true))))
 
 (defn -main
   "I don't do a whole lot ... yet."
