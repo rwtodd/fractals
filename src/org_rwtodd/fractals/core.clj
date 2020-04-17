@@ -2,10 +2,12 @@
   (:import (javax.swing JFrame JLabel JMenuBar ImageIcon
                         SwingUtilities JMenu JMenuItem
                         JRadioButtonMenuItem ButtonGroup
-                        JFileChooser)
-           (java.awt Color BorderLayout)
+                        JFileChooser JDialog JPanel JButton
+                        Box BoxLayout BorderFactory
+                        JTextArea JScrollPane)
+           (java.awt Color BorderLayout Dimension)
            (java.awt.image BufferedImage)
-           (java.awt.event MouseAdapter ActionListener))
+           (java.awt.event MouseAdapter ActionListener WindowEvent))
   (:require [org-rwtodd.fractals.colors :as colors]
             [org-rwtodd.fractals.algo :as algo]
             [clojure.edn :as edn])
@@ -83,15 +85,74 @@
 (defn change-inputs!
   "Update the global state's existing keys with any provided."
   [& kvs]
-  (swap! app-state
-         (fn [s]
-           (evaluate-state (apply assoc s kvs))))
-  (let [st @app-state]
+  (let [st (swap! app-state
+                  (fn [s]
+                    (evaluate-state (apply assoc s kvs))))]
     (if-let [frm (:swing-frame st)]
       (do
         (generate-image)
         (.setIcon (:swing-label st) (ImageIcon. (:image st)))
         (doto frm .pack .repaint)))))
+
+(defn- algorithm-dialog
+  [st]
+  (let [dlg (JDialog. (:swing-frame st) "Algorithm Settings" true)
+        inputs (Box. BoxLayout/PAGE_AXIS)
+        frac-txt (JTextArea. (:in-fractal st))
+        scheme-txt (JTextArea. (:in-scheme st))
+        btns (Box. BoxLayout/LINE_AXIS)
+        okbtn (JButton. "Ok")
+        cbtn  (JButton. "Cancel")
+        handlers (reify ActionListener
+                   (actionPerformed [_ ae]
+                     (case (.getActionCommand ae)
+                       "Ok" (change-inputs! :in-fractal (.getText frac-txt)
+                                            :in-scheme (.getText scheme-txt))
+                       "Cancel" nil
+                       (println (.getActionCommand ae)))
+                     (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))))]
+    (.. dlg getContentPane (setLayout (BorderLayout.)))
+    ;; setup the input boxes
+    (doto inputs
+      (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
+      (.add (JLabel. "Algorithm:"))
+      (.add (JScrollPane. frac-txt))
+      (.add (Box/createRigidArea (Dimension. 0 5)))
+      (.add (JLabel. "Color Scheme:"))
+      (.add (JScrollPane. scheme-txt)))
+
+    ;; setup the OK, Cancel buttons
+    (.addActionListener okbtn handlers)
+    (.addActionListener cbtn handlers)
+    (doto btns
+      (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
+      (.add (Box/createHorizontalGlue))
+      (.add okbtn)
+      (.add (Box/createRigidArea (Dimension. 5 0)))
+      (.add cbtn))
+
+    (doto dlg
+      (.add btns BorderLayout/SOUTH)
+      (.add inputs)
+      .pack
+      .show)))
+
+(defn- create-settings-menu
+  "Create the settings options in a `Settings` menu, and return it."
+  []
+  (let [mm (JMenu. "Settings")
+        alg (JMenuItem. "Algorithm")
+        por (JMenuItem. "Viewport")
+        poract (fn [] (println "port!"))
+        listener  (reify ActionListener
+                    (actionPerformed [_ ae]
+                      (case (.getActionCommand ae)
+                        "Algorithm" (algorithm-dialog @app-state)
+                        "Viewport"  (poract)
+                        nil)))]
+    (.addActionListener alg listener)
+    (.addActionListener por listener)
+    (doto mm (.add alg) (.add por))))
 
 (defn- create-file-menu
   "Create the file options in a `File` menu, and return it."
@@ -154,9 +215,10 @@
   "Put the menu items on the frame"
   [frm]
   (let [m (JMenuBar.)
-        fmenu (create-file-menu)
-        smenu (create-scale-menu)]
-    (doto m (.add fmenu) (.add smenu))
+        fmenu  (create-file-menu)
+        stmenu (create-settings-menu)
+        scmenu (create-scale-menu)]
+    (doto m (.add fmenu) (.add stmenu) (.add scmenu))
     (.setJMenuBar frm m)))
 
 (defn- click-handler
