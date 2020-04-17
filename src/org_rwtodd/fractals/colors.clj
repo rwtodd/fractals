@@ -80,7 +80,7 @@
     (satisfies? ColorScheme s) s
     (integer? s) (->VectorColorScheme [s])
     (instance? Color s) (->VectorColorScheme [(.getRGB s)])
-    :else  (throw (IllegalArgumentException. "Can't convert to a colorscheme!"))))
+    :else  (throw (IllegalArgumentException. (str "Can't convert " s " to a colorscheme!")))))
 
 (defn combine-schemes
   "combines a series of `ColorScheme` objects by concatenating their

@@ -1,12 +1,14 @@
 (ns org-rwtodd.fractals.core
   (:import (javax.swing JFrame JLabel JMenuBar ImageIcon
                         SwingUtilities JMenu JMenuItem
-                        JRadioButtonMenuItem ButtonGroup)
+                        JRadioButtonMenuItem ButtonGroup
+                        JFileChooser)
            (java.awt Color BorderLayout)
            (java.awt.image BufferedImage)
            (java.awt.event MouseAdapter ActionListener))
   (:require [org-rwtodd.fractals.colors :as colors]
-            [org-rwtodd.fractals.algo :as algo])
+            [org-rwtodd.fractals.algo :as algo]
+            [clojure.edn :as edn])
   (:gen-class))
 
 (def starter-spec
@@ -19,7 +21,6 @@
    :center [-0.5 0.0]
    :size [1.0 1.0]
    :image-size [300 300]
-   :click-scale 1.0
    })
 
 (defn- state-string
@@ -31,10 +32,14 @@
   "fill out the application state by evaluating the inputs."
   [st]
   (let [[sx sy] (:image-size st)
-        existing-img (:image st)]
+        existing-img (:image st)
+        curns (find-ns 'org-rwtodd.fractals.core)]
     (assoc st
-           :fractal (eval (read-string (:in-fractal st)))
-           :scheme  (colors/vectorize-scheme (eval (read-string (:in-scheme st))))
+           :fractal (binding [*ns* curns]
+                      (eval (read-string (:in-fractal st))))
+           :scheme  (colors/vectorize-scheme
+                     (binding [*ns* curns]
+                       (eval (read-string (:in-scheme st)))))
            :image   (if (and existing-img
                              (= (.getWidth existing-img) sx)
                              (= (.getHeight existing-img) sy))
@@ -92,8 +97,34 @@
   "Create the file options in a `File` menu, and return it."
   []
   (let [mm (JMenu. "File")
-        save (JMenuItem. "Save")
-        load (JMenuItem. "Load")]
+        save (JMenuItem. "Save As")
+        load (JMenuItem. "Load")
+        saveact (fn []
+                  (let [st @app-state
+                        jfc (JFileChooser.)]
+                    (when (= JFileChooser/APPROVE_OPTION
+                           (.showSaveDialog jfc (:swing-frame st)))
+                      (spit (.getSelectedFile jfc) (state-string st)))))
+        loadact  (fn []
+                   (let [frm (:swing-frame @app-state)
+                         jfc (JFileChooser.)]
+                     (when (= JFileChooser/APPROVE_OPTION
+                            (.showOpenDialog jfc frm))
+                         (let [nst (swap! app-state
+                                          merge
+                                          (evaluate-state
+                                           (edn/read-string (slurp (.getSelectedFile jfc)))))]
+                           (generate-image)
+                           (.setIcon (:swing-label nst) (ImageIcon. (:image nst)))
+                         (doto frm .pack .repaint)))))
+        listener  (reify ActionListener
+                    (actionPerformed [_ ae]
+                      (case (.getActionCommand ae)
+                        "Save As" (saveact)
+                        "Load"    (loadact)
+                        nil)))]
+    (.addActionListener save listener)
+    (.addActionListener load listener)
     (doto mm (.add save) (.add load))))
     
 (defn- create-scale-menu
