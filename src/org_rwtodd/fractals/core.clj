@@ -4,7 +4,8 @@
                         JRadioButtonMenuItem ButtonGroup
                         JFileChooser JDialog JPanel JButton
                         Box BoxLayout BorderFactory
-                        JTextArea JScrollPane JTextField)
+                        JTextArea JScrollPane JTextField
+                        WindowConstants)
            (java.awt Color BorderLayout Dimension)
            (java.awt.image BufferedImage)
            (java.awt.event MouseAdapter ActionListener WindowEvent))
@@ -60,7 +61,12 @@
                       existing-img
                       (BufferedImage. sx sy BufferedImage/TYPE_INT_RGB)))))
 
-(def app-state (atom (evaluate-state starter-spec)))
+(def app-state (atom nil))
+
+(defn reset-state!
+  "Reset the application state to a known-good starter state."
+  []
+  (reset! app-state (evaluate-state starter-spec)))
 
 (defn generate-image
   []
@@ -280,12 +286,14 @@
 
 (defn generate-frame
   "Start the main frame--must be called from swing thread"
-  []
+  [in-repl?]
   (generate-image)
   (let [frm (JFrame. "Fractals")
         pane (.getContentPane frm)
         icon (ImageIcon. (:image @app-state))
         lbl (JLabel. icon)]
+    (when-not in-repl? (.setDefaultCloseOperation frm WindowConstants/EXIT_ON_CLOSE))
+    ;; setIconImage(javax.imageio.ImageIO.read(this.getClass().getResource("/icon.gif")));
     (swap! app-state assoc
            :swing-frame frm
            :swing-label lbl
@@ -300,8 +308,15 @@
     (.add pane lbl)
     (doto frm .pack (.setVisible true))))
 
+(defn -main-in-repl
+  "start up the program, but don't let it quit when the window is closed."
+  []
+  (reset-state!)
+  (SwingUtilities/invokeLater #(generate-frame true)))
+  
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (SwingUtilities/invokeLater generate-frame))
+  (reset-state!)
+  (SwingUtilities/invokeLater #(generate-frame false)))
 
