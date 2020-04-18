@@ -1,19 +1,52 @@
 (ns org-rwtodd.fractals.core
-  (:import (javax.swing JFrame JLabel JMenuBar ImageIcon
+  (:import (javax.imageio ImageIO)
+           (javax.swing JFrame JLabel JMenuBar ImageIcon
                         SwingUtilities JMenu JMenuItem
                         JRadioButtonMenuItem ButtonGroup
                         JFileChooser JDialog JPanel JButton
                         Box BoxLayout BorderFactory
                         JTextArea JScrollPane JTextField
-                        WindowConstants)
+                        WindowConstants JSeparator)
+           (javax.swing.filechooser FileNameExtensionFilter)
            (java.awt Color BorderLayout Dimension)
            (java.awt.image BufferedImage)
-           (java.awt.event MouseAdapter ActionListener WindowEvent))
+           (java.awt.event MouseAdapter ActionListener WindowEvent)
+           (java.util.prefs Preferences))
   (:require [org-rwtodd.fractals.colors :as colors]
             [org-rwtodd.fractals.algo :as algo]
-            [clojure.edn :as edn])
+            [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.string :as str])
   (:gen-class))
 
+
+;; Preferences to remember where we last loaded or saved fractals
+(def last-save-loc (let [node (.node (Preferences/userRoot) "org_rwtodd/fractals")]
+                     (atom { :prefs node :value (.get node "LastDir" nil) })))
+
+
+(defn- update-save-loc!
+  "Update the value of the save location from a provided JFileChooser, and save
+  it to the preferences node if needed."
+  [^JFileChooser jfc]
+  (let [^java.io.File selected (.getSelectedFile jfc)
+        loc (str (.getParentFile selected))]
+    (swap! last-save-loc
+           (fn [orig]
+             (when-not (= (:value orig) loc)
+               (.put (:prefs orig) "LastDir" loc))
+             (assoc orig :value loc)))))
+
+(defn- configure-file-chooser
+  "Set up a file chooser for an `extension` and use the `@last-save-loc` if available"
+  [extension]
+  (let [jfc (JFileChooser.)
+        filt (FileNameExtensionFilter. (str extension " Files") (into-array String [extension]))]
+    (.setFileFilter jfc filt)
+    (when-let [dir (:value @last-save-loc)]
+      (.setCurrentDirectory jfc (io/file dir)))
+    jfc))
+      
 (defn- labelled-widget
   "Creates a lbl followed by the given widget in parent.
   Returns the widget instance."
@@ -25,7 +58,15 @@
       (.add lbox)
       (.add widget))
     widget))
-        
+
+(defn- ensure-extension
+  "Make sure the file f ends in .ext, otherwise add it.  Returns
+  the new file"
+  [f ext]
+  (if (str/ends-with? (str f) ext)
+    f
+    (io/file (str f ext))))        
+
 (def starter-spec
   "Default starting point for fractal exploration"
   {
@@ -69,9 +110,9 @@
   (reset! app-state (evaluate-state starter-spec)))
 
 (defn generate-image
-  []
-  (let [st @app-state
-        [cx cy]    (:center st)
+  "Generate the image specified by the given state, into the given state's `:image`."
+  [st]
+  (let [[cx cy]    (:center st)
         [szx szy]  (:size   st)]
     (algo/fill-image (:image st) (:fractal st) (:scheme st)
                      {:xmin (- cx szx) :xmax (+ cx szx)
@@ -79,7 +120,7 @@
 
 (defn recenter!
   "Adjust the global state for a new center `x` and `y`, with optional
-  rescaling by `scale`"
+  rescaling by `scale`.  Returns the new application state."
   ([x y]
    (swap! app-state assoc :center [x y]))
   ([x y scale]
@@ -92,13 +133,14 @@
 
 (defn recenter-on-image!
   [x y]
-  (let [st @app-state
-        [cx cy] (:center st)
-        [szx szy] (:size st)
-        [imwid imht] (:image-size st)
-        newx (- cx (- szx (* (/ (double x) imwid) 2 szx)))
-        newy (- cy (- szy (* (/ (double y) imht) 2 szy)))]
-    (recenter! newx newy (:click-scale st))))
+  (let [st            @app-state
+        [cx cy]       (:center st)
+        [szx szy]     (:size st)
+        [imwid imht]  (:image-size st)
+        newx          (- cx (- szx (* (/ (double x) imwid) 2 szx)))
+        newy          (- cy (- szy (* (/ (double y) imht) 2 szy)))
+        st            (recenter! newx newy (:click-scale st))]
+    (generate-image st)))
 
 (defn change-inputs!
   "Update the global state's existing keys with any provided."
@@ -108,7 +150,7 @@
                     (evaluate-state (apply assoc s kvs))))]
     (if-let [frm (:swing-frame st)]
       (do
-        (generate-image)
+        (generate-image st)
         (.setIcon (:swing-label st) (ImageIcon. (:image st)))
         (doto frm .pack .repaint)))))
 
@@ -211,39 +253,103 @@
     (.addActionListener por listener)
     (doto mm (.add alg) (.add por))))
 
+(defn save-image
+  "Save the fractal image given in application atate `st` to a
+  PNG file named `fn` at size `sz` given as `[x y]`."
+  [st sz fn]
+  (let [img (if (= sz (:image-size st))
+              (:image st)
+              (generate-image (assoc st
+                                     :image
+                                     (BufferedImage. (first sz) (second sz) BufferedImage/TYPE_INT_RGB))))]
+    (spit (str fn ".fract") (state-string st))
+    (ImageIO/write img "png" (io/file fn))))
+
+(defn- export-dialog
+  "Create a dialog box to let you export a picture of the fractal."
+  [st]
+  (let [dlg (JDialog. (:swing-frame st) "Image Export" true)
+        inputs (Box. BoxLayout/PAGE_AXIS)
+        sz-txt (labelled-widget inputs "Export Size:" (JTextField. (pr-str (:image-size st))))
+        btns (Box. BoxLayout/LINE_AXIS)
+        ebtn (JButton. "Export")
+        qbtn (JButton. "Quit")
+        handlers (reify ActionListener
+                   (actionPerformed [_ ae]
+                     (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
+                     (case (.getActionCommand ae)
+                       "Export" (let [jfc (configure-file-chooser "png")]
+                                  (when (= JFileChooser/APPROVE_OPTION
+                                           (.showSaveDialog jfc (:swing-frame st)))
+                                    (save-image st (read-string (.getText sz-txt)) (ensure-extension (.getSelectedFile jfc) ".png"))
+                                    (update-save-loc! jfc)))
+                       "Quit"  nil
+                       (println (.getActionCommand ae)))))]
+    (.. dlg getContentPane (setLayout (BorderLayout.)))
+    (.setBorder inputs (BorderFactory/createEmptyBorder 5 5 5 5))
+
+    ;; setup the Apply Quit buttons
+    (.addActionListener ebtn handlers)
+    (.addActionListener qbtn handlers)
+    (doto btns
+      (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
+      (.add (Box/createHorizontalGlue))
+      (.add ebtn)
+      (.add (Box/createRigidArea (Dimension. 5 0)))
+      (.add qbtn))
+
+    (doto dlg
+      (.add btns BorderLayout/SOUTH)
+      (.add inputs)
+      .pack
+      .show)))
+
 (defn- create-file-menu
-  "Create the file options in a `File` menu, and return it."
-  []
+  "Create the file options in a `File` menu, on the given frame `frm` and return it."
+  [frm]
   (let [mm (JMenu. "File")
         save (JMenuItem. "Save As")
         load (JMenuItem. "Load")
+        export (JMenuItem. "Export")
+        quit   (JMenuItem. "Exit")
         saveact (fn []
                   (let [st @app-state
-                        jfc (JFileChooser.)]
+                        jfc (configure-file-chooser "fract")]
                     (when (= JFileChooser/APPROVE_OPTION
-                           (.showSaveDialog jfc (:swing-frame st)))
-                      (spit (.getSelectedFile jfc) (state-string st)))))
+                             (.showSaveDialog jfc (:swing-frame st)))
+                      (update-save-loc! jfc)
+                      (spit (ensure-extension (.getSelectedFile jfc) ".fract") (state-string st)))))
         loadact  (fn []
                    (let [frm (:swing-frame @app-state)
-                         jfc (JFileChooser.)]
+                         jfc (configure-file-chooser "fract")]
                      (when (= JFileChooser/APPROVE_OPTION
                             (.showOpenDialog jfc frm))
                          (let [nst (swap! app-state
                                           merge
                                           (evaluate-state
                                            (edn/read-string (slurp (.getSelectedFile jfc)))))]
-                           (generate-image)
+                           (update-save-loc! jfc)
+                           (generate-image nst)
                            (.setIcon (:swing-label nst) (ImageIcon. (:image nst)))
-                         (doto frm .pack .repaint)))))
+                           (doto frm .pack .repaint)))))
         listener  (reify ActionListener
                     (actionPerformed [_ ae]
                       (case (.getActionCommand ae)
                         "Save As" (saveact)
                         "Load"    (loadact)
+                        "Export"  (export-dialog @app-state)
+                        "Exit"    (.dispatchEvent frm (WindowEvent. frm WindowEvent/WINDOW_CLOSING))                        
                         nil)))]
     (.addActionListener save listener)
     (.addActionListener load listener)
-    (doto mm (.add save) (.add load))))
+    (.addActionListener export listener)
+    (.addActionListener quit  listener)
+    (doto mm
+      (.add save)
+      (.add load)
+      (.add export)
+      (.add (JSeparator.))
+      (.add quit))))
     
 (defn- create-scale-menu
   "Create the zooming options in a `Scale` menu, and return it."
@@ -272,7 +378,7 @@
   "Put the menu items on the frame"
   [frm]
   (let [m (JMenuBar.)
-        fmenu  (create-file-menu)
+        fmenu  (create-file-menu frm)
         stmenu (create-settings-menu)
         scmenu (create-scale-menu)]
     (doto m (.add fmenu) (.add stmenu) (.add scmenu))
@@ -281,19 +387,18 @@
 (defn- click-handler
   "handle clicks on the main frame"
   [x y]
-  (recenter-on-image! x y)
-  (generate-image))
+  (recenter-on-image! x y))
 
 (defn generate-frame
   "Start the main frame--must be called from swing thread"
   [in-repl?]
-  (generate-image)
+  (generate-image @app-state)
   (let [frm (JFrame. "Fractals")
         pane (.getContentPane frm)
         icon (ImageIcon. (:image @app-state))
         lbl (JLabel. icon)]
     (when-not in-repl? (.setDefaultCloseOperation frm WindowConstants/EXIT_ON_CLOSE))
-    ;; setIconImage(javax.imageio.ImageIO.read(this.getClass().getResource("/icon.gif")));
+    (.setIconImage frm (ImageIO/read (io/resource "org_rwtodd/fractals/icon.png")))
     (swap! app-state assoc
            :swing-frame frm
            :swing-label lbl
@@ -308,7 +413,7 @@
     (.add pane lbl)
     (doto frm .pack (.setVisible true))))
 
-(defn -main-in-repl
+(defn main-in-repl
   "start up the program, but don't let it quit when the window is closed."
   []
   (reset-state!)
