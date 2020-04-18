@@ -4,7 +4,7 @@
                         JRadioButtonMenuItem ButtonGroup
                         JFileChooser JDialog JPanel JButton
                         Box BoxLayout BorderFactory
-                        JTextArea JScrollPane)
+                        JTextArea JScrollPane JTextField)
            (java.awt Color BorderLayout Dimension)
            (java.awt.image BufferedImage)
            (java.awt.event MouseAdapter ActionListener WindowEvent))
@@ -13,6 +13,18 @@
             [clojure.edn :as edn])
   (:gen-class))
 
+(defn- labelled-widget
+  "Creates a lbl followed by the given widget in parent.
+  Returns the widget instance."
+  [parent lbl widget]
+  (let [l    (JLabel. lbl)
+        lbox (Box. BoxLayout/LINE_AXIS)]
+    (doto lbox (.add l) (.add (Box/createHorizontalGlue)))
+    (doto parent
+      (.add lbox)
+      (.add widget))
+    widget))
+        
 (def starter-spec
   "Default starting point for fractal exploration"
   {
@@ -96,40 +108,79 @@
 
 (defn- algorithm-dialog
   [st]
-  (let [dlg (JDialog. (:swing-frame st) "Algorithm Settings" true)
+  (let [dlg (JDialog. (:swing-frame st) "Algorithm Settings" false)
         inputs (Box. BoxLayout/PAGE_AXIS)
         frac-txt (JTextArea. (:in-fractal st))
         scheme-txt (JTextArea. (:in-scheme st))
         btns (Box. BoxLayout/LINE_AXIS)
-        okbtn (JButton. "Ok")
-        cbtn  (JButton. "Cancel")
+        abtn (JButton. "Apply")
+        qbtn (JButton. "Quit")
         handlers (reify ActionListener
                    (actionPerformed [_ ae]
                      (case (.getActionCommand ae)
-                       "Ok" (change-inputs! :in-fractal (.getText frac-txt)
-                                            :in-scheme (.getText scheme-txt))
-                       "Cancel" nil
-                       (println (.getActionCommand ae)))
-                     (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))))]
+                       "Apply" (change-inputs! :in-fractal (.getText frac-txt)
+                                               :in-scheme (.getText scheme-txt))
+                       "Quit"  (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
+                       (println (.getActionCommand ae)))))]
     (.. dlg getContentPane (setLayout (BorderLayout.)))
     ;; setup the input boxes
-    (doto inputs
-      (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
-      (.add (JLabel. "Algorithm:"))
-      (.add (JScrollPane. frac-txt))
-      (.add (Box/createRigidArea (Dimension. 0 5)))
-      (.add (JLabel. "Color Scheme:"))
-      (.add (JScrollPane. scheme-txt)))
+    (.setBorder inputs (BorderFactory/createEmptyBorder 5 5 5 5))
+    (labelled-widget inputs "Algorithm:" (JScrollPane. frac-txt))
+    (.add inputs (Box/createRigidArea (Dimension. 0 5)))
+    (labelled-widget inputs "Color Scheme:" (JScrollPane. scheme-txt))
 
-    ;; setup the OK, Cancel buttons
-    (.addActionListener okbtn handlers)
-    (.addActionListener cbtn handlers)
+    ;; setup the Apply Quit buttons
+    (.addActionListener abtn handlers)
+    (.addActionListener qbtn handlers)
     (doto btns
       (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
       (.add (Box/createHorizontalGlue))
-      (.add okbtn)
+      (.add abtn)
       (.add (Box/createRigidArea (Dimension. 5 0)))
-      (.add cbtn))
+      (.add qbtn))
+
+    (doto dlg
+      (.add btns BorderLayout/SOUTH)
+      (.add inputs)
+      .pack
+      .show)))
+
+(defn- viewport-dialog
+  [st]
+  (let [dlg (JDialog. (:swing-frame st) "Viewport Settings" true)
+        inputs (Box. BoxLayout/PAGE_AXIS)
+        center-txt  (JTextField. (pr-str (:center st)))  
+        size-txt    (JTextField. (pr-str (:size st)))
+        imgsize-txt (JTextField. (pr-str (:image-size st)))
+        btns (Box. BoxLayout/LINE_AXIS)
+        abtn (JButton. "Apply")
+        qbtn (JButton. "Quit")
+        handlers (reify ActionListener
+                   (actionPerformed [_ ae]
+                     (case (.getActionCommand ae)
+                       "Apply" (change-inputs! :center     (read-string (.getText center-txt))
+                                               :size       (read-string (.getText size-txt))
+                                               :image-size (read-string (.getText imgsize-txt)))
+                       "Quit"  (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
+                       (println (.getActionCommand ae)))))]
+    (.. dlg getContentPane (setLayout (BorderLayout.)))
+    ;; setup the input boxes
+    (.setBorder inputs (BorderFactory/createEmptyBorder 5 5 5 5))
+    (labelled-widget inputs "Center Point:" center-txt)
+    (.add inputs (Box/createRigidArea (Dimension. 0 5)))
+    (labelled-widget inputs "Span Size:" size-txt)
+    (.add inputs (Box/createRigidArea (Dimension. 0 5)))
+    (labelled-widget inputs "Image Size:" imgsize-txt)
+
+    ;; setup the Apply Quit buttons
+    (.addActionListener abtn handlers)
+    (.addActionListener qbtn handlers)
+    (doto btns
+      (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
+      (.add (Box/createHorizontalGlue))
+      (.add abtn)
+      (.add (Box/createRigidArea (Dimension. 5 0)))
+      (.add qbtn))
 
     (doto dlg
       (.add btns BorderLayout/SOUTH)
@@ -148,7 +199,7 @@
                     (actionPerformed [_ ae]
                       (case (.getActionCommand ae)
                         "Algorithm" (algorithm-dialog @app-state)
-                        "Viewport"  (poract)
+                        "Viewport"  (viewport-dialog @app-state)
                         nil)))]
     (.addActionListener alg listener)
     (.addActionListener por listener)
