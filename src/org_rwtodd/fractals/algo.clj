@@ -10,6 +10,9 @@
 ;; ~~~~ START faster math for this part of the file ~~~
 (set! *unchecked-math* true)
 
+;; TODO: try more formulas from http://www.lifesmith.com/formulas.html
+
+;; Formula:  F(Z) = Z^2 + Z_0
 (deftype Mandelbrot [depth esc]
   Algorithm
   (fidelity [_] depth)
@@ -26,6 +29,40 @@
                    (+ x (- xsq ysq))
                    (+ y tmp tmp))))))))
 
+;; Formula: F(Z) = Z^3 + Z_0
+(deftype Z3-plus-Z0 [depth esc]
+  Algorithm
+  (fidelity [_] depth)
+  (point [_ x y]
+    (loop [ans (dec depth)
+           cx x
+           cy y]
+      (let [xsq (* cx cx)
+            ysq (* cy cy)]
+        (if (or (zero? ans) (< esc (+ xsq ysq)))
+          ans
+          (recur (dec ans)
+                 (+ x (- (* xsq cx) (* 3 cx ysq)))
+                 (+ y (- (* 3 cy xsq) (* ysq cy)))))))))
+
+;; Formula: F(Z) = Z^4 + Z_0
+(deftype Z4-plus-Z0 [depth esc]
+  Algorithm
+  (fidelity [_] depth)
+  (point [_ x y]
+    (loop [ans (dec depth)
+           cx x
+           cy y]
+      (let [xsq (* cx cx)
+            ysq (* cy cy)]
+        (if (or (zero? ans) (< esc (+ xsq ysq)))
+          ans
+          (recur (dec ans)
+                 (+ x (+ (* xsq xsq) (* -6 xsq ysq) (* ysq ysq)))
+                 (+ y (* 4 (- (* cy xsq cx) (* cx ysq cy))))))))))
+
+
+;; Formula:  F(Z) = Z^2 + C  ;; C = (addX, addY)
 (deftype JuliaSquared [depth esc addX addY]
   Algorithm
   (fidelity [_] depth)
@@ -42,6 +79,7 @@
                    (+ addX (- xsq ysq))
                    (+ addY tmp tmp))))))))
 
+;; Formula:  F(Z) = exp(Z) + C  ;; C = (addX, addY)
 (deftype JuliaExp [depth esc addX addY]
   Algorithm
   (fidelity [_] depth)
@@ -56,6 +94,7 @@
                  (+ addX (* tmp (Math/cos cy)))
                  (+ addY (* tmp (Math/sin cy)))))))))
 
+;; Formula: F(Z) = Z*exp(Z) + C ;; C = (addX, addY)
 (deftype JuliaZExp [depth esc addX addY]
   Algorithm
   (fidelity [_] depth)
