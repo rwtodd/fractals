@@ -75,8 +75,8 @@
  "(colors/combine-schemes 0
                          (colors/gradient-scheme 255 0xff0000 0xddff00 0x0000ff))"
    :center [-0.5 0.0]
-   :size [1.0 1.0]
-   :image-size [300 300]
+   :size [1.366 0.768]
+   :image-size [683 384]
    })
 
 (defn- state-string

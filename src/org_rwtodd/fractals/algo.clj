@@ -29,8 +29,25 @@
                    (+ x (- xsq ysq))
                    (+ y tmp tmp))))))))
 
+;; Formula:  F(Z) = Z^2 -Z + Z_0
+(deftype Z2-Z+Z0 [depth esc]
+  Algorithm
+  (fidelity [_] depth)
+  (point [_ x y]
+    (loop [ans (dec depth)
+           cx x
+           cy y]
+      (let [xsq (* cx cx)
+            ysq (* cy cy)]
+        (if (or (zero? ans) (< esc (+ xsq ysq)))
+          ans
+          (let [tmp (* cx cy)]
+            (recur (dec ans)
+                   (+ x (- xsq ysq cx))
+                   (+ y tmp tmp (- cy)))))))))
+
 ;; Formula: F(Z) = Z^3 + Z_0
-(deftype Z3-plus-Z0 [depth esc]
+(deftype Z3+Z0 [depth esc]
   Algorithm
   (fidelity [_] depth)
   (point [_ x y]
@@ -46,7 +63,7 @@
                  (+ y (- (* 3 cy xsq) (* ysq cy)))))))))
 
 ;; Formula: F(Z) = Z^4 + Z_0
-(deftype Z4-plus-Z0 [depth esc]
+(deftype Z4+Z0 [depth esc]
   Algorithm
   (fidelity [_] depth)
   (point [_ x y]
@@ -61,6 +78,23 @@
                  (+ x (+ (* xsq xsq) (* -6 xsq ysq) (* ysq ysq)))
                  (+ y (* 4 (- (* cy xsq cx) (* cx ysq cy))))))))))
 
+
+;; Formula: F(Z) = Z^5 + Z_0
+(deftype Z5+Z0 [depth esc]
+  Algorithm
+  (fidelity [_] depth)
+  (point [_ x y]
+    (loop [ans (dec depth)
+           cx x
+           cy y]
+      (let [xsq (* cx cx)
+            ysq (* cy cy)]
+        (if (or (zero? ans) (< esc (+ xsq ysq)))
+          ans
+          (let [cx4 (* xsq xsq),  cy4 (* ysq ysq)]
+          (recur (dec ans)
+                 (+ x (* cx4 cx) (* -10 xsq cx ysq) (* 5 cx cy4))
+                 (+ y (* 5 cy cx4) (* -10 xsq ysq cy) (* cy4 cy)))))))))
 
 ;; Formula:  F(Z) = Z^2 + C  ;; C = (addX, addY)
 (deftype JuliaSquared [depth esc addX addY]
