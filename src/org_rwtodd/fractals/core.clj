@@ -6,7 +6,8 @@
                         JFileChooser JDialog JPanel JButton
                         Box BoxLayout BorderFactory
                         JTextArea JScrollPane JTextField
-                        WindowConstants JSeparator)
+                        WindowConstants JSeparator
+                        JList ListCellRenderer)
            (javax.swing.filechooser FileNameExtensionFilter)
            (java.awt Color BorderLayout Dimension)
            (java.awt.image BufferedImage)
@@ -154,6 +155,36 @@
         (.setIcon (:swing-label st) (ImageIcon. (:image st)))
         (doto frm .pack .repaint)))))
 
+(def algorithm-list
+  (delay
+    (->>
+     (into []
+           (comp  (filter (fn [[k v]] (str/starts-with? (str k) "->")))
+                  (map (fn [[k v]] (assoc (select-keys (meta v) [:doc :arglists]) :name (str "algo/" k)))))
+           (ns-publics 'org-rwtodd.fractals.algo))
+     (sort-by :name)
+     (to-array))))
+
+(defn- algorithm-list-dialog
+  [st]
+  (let [dlg (JDialog. (:swing-frame st) "Algorithm List" false)
+        renderer (let [lbl (doto (JLabel.)
+                             (.setOpaque true)
+                             (.setBorder (BorderFactory/createLineBorder Color/BLACK)))]
+                   (reify ListCellRenderer
+                     (getListCellRendererComponent [_ lst v _ _ focused?]
+                       (doto lbl
+                         (.setText (format "<html><h3>%s</h3><p>%s<br>%s</p></html>" (:name v) (:doc v) (:arglists v)))
+                         (.setBackground  (if focused? (.getSelectionBackground lst) (.getBackground lst)))
+                         (.setForeground  (if focused? (.getSelectionForeground lst) (.getForeground lst)))))))
+        ^"[Ljava.lang.Object;" algs  @algorithm-list
+        jlst (doto (JList. algs) (.setCellRenderer renderer))
+        jsp  (JScrollPane. jlst)]
+    (doto dlg
+      (.setContentPane jsp)
+      .pack
+      .show)))
+
 (defn- algorithm-dialog
   [st]
   (let [dlg (JDialog. (:swing-frame st) "Algorithm Settings" false)
@@ -161,14 +192,16 @@
         frac-txt (JTextArea. (:in-fractal st))
         scheme-txt (JTextArea. (:in-scheme st))
         btns (Box. BoxLayout/LINE_AXIS)
+        lbtn (JButton. "Alg List")
         abtn (JButton. "Apply")
         qbtn (JButton. "Quit")
         handlers (reify ActionListener
                    (actionPerformed [_ ae]
                      (case (.getActionCommand ae)
-                       "Apply" (change-inputs! :in-fractal (.getText frac-txt)
-                                               :in-scheme (.getText scheme-txt))
-                       "Quit"  (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
+                       "Alg List"  (algorithm-list-dialog st)
+                       "Apply"     (change-inputs! :in-fractal (.getText frac-txt)
+                                                   :in-scheme (.getText scheme-txt))
+                       "Quit"      (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
                        (println (.getActionCommand ae)))))]
     (.. dlg getContentPane (setLayout (BorderLayout.)))
     ;; setup the input boxes
@@ -178,13 +211,16 @@
     (labelled-widget inputs "Color Scheme:" (JScrollPane. scheme-txt))
 
     ;; setup the Apply Quit buttons
+    (.addActionListener lbtn handlers)
     (.addActionListener abtn handlers)
     (.addActionListener qbtn handlers)
     (doto btns
       (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
       (.add (Box/createHorizontalGlue))
+      (.add lbtn)
+      (.add  (Box/createRigidArea (Dimension. 5 0)))
       (.add abtn)
-      (.add (Box/createRigidArea (Dimension. 5 0)))
+      (.add  (Box/createRigidArea (Dimension. 5 0)))
       (.add qbtn))
 
     (doto dlg
