@@ -5,13 +5,13 @@ older JavaFX project [[https://github.com/rwtodd/Java.JFXMandelbrot][elsewhere o
 think I'll use ~clojure~ with some ~Swing~.
 
 Actually, this was only going to be a prototype for a less resource-hungry
-~Java~ version, but it turned out that the speed and memory usage was not
+=Java= version, but it turned out that the speed and memory usage was not
 as bad as I had feared.  So, prototype no more!
 
 
 ** Running
 
-I run the ~uberjar~ with:
+I run the =uberjar= with:
 
 #+BEGIN_EXAMPLE
 -Xmx256m -XX:MaxMetaspaceSize=38m 

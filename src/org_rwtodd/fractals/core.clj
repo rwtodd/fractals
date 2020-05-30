@@ -71,7 +71,7 @@
 (def starter-spec
   "Default starting point for fractal exploration"
   {
-   :in-fractal "(algo/->Mandelbrot 32 4.0)"
+   :in-fractal "(algo/->Alg0001 32 4.0)"
    :in-scheme
  "(colors/combine-schemes 0
                          (colors/gradient-scheme 255 0xff0000 0xddff00 0x0000ff))"
