@@ -33,6 +33,21 @@
 ;; ~~~~ START faster math for this part of the file ~~~
 (set! *unchecked-math* true)
 
+
+;; ~~~~ some complex number helpers (slower than inlining them, probably)
+(defn cplx-mul [[x y] [a b]]
+  [(- (* x a) (* y b))
+   (+ (* x b) (* y a))])
+
+(defn cplx-pow [c pow]
+  (reduce cplx-mul (repeat pow c)))
+
+(defn cplx-scale [alpha [x y]]
+  [(* alpha x) (* alpha y)])
+
+(defn cplx-add [[x y] [a b]]
+  [(+ x a) (+ y b)])
+
 ;; TODO: try more formulas from http://www.lifesmith.com/formulas.html
   
 (def-algo Alg0001 "F(Z) = Z^2 + Z_0 (Mandelbrot)"
@@ -143,6 +158,27 @@
                (+ addX (- (* cx expr) (* cy expi)))
                (+ addY (* cx expi) (* cy expr)))))))
 
+(def-algo Alg0009 "F(Z) = Z - alpha*f(Z)/df(Z) (Newton's Fractal)"
+  [depth tolerance alpha f df]
+  (loop [ans (dec depth)
+         lx  x
+         ly  y]
+    (let [[fx fy]   (f lx ly)
+          [dfx dfy] (df lx ly)
+          denom     (+ (* dfx dfx) (* dfy dfy))
+          numx      (+ (* fx dfx) (* fy dfy))
+          numy      (- (* dfx fy) (* fx dfy))]
+      (if (< denom 1E-50)
+        0  ;; zero denominator equals it never will converge
+        (let [nx     (- lx (* alpha (/ numx denom)))
+              ny     (- ly (* alpha (/ numy denom)))
+              deltax (- nx lx)
+              deltay (- ny ly)
+              norm   (+ (* deltax deltax) (* deltay deltay))]
+          (if (or (zero? ans) (< norm tolerance))
+            ans
+            (recur (dec ans) nx ny)))))))
+    
 (defn- split-into-ranges
   "splits `n` into `rsize`-sized ranges covering 0 to `n`"
   [n rsize]
