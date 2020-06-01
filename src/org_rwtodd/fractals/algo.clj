@@ -48,6 +48,22 @@
 (defn cplx-add [[x y] [a b]]
   [(+ x a) (+ y b)])
 
+(defn cplx-sub [[x y] [a b]]
+  [(- x a) (- y b)])
+
+(defn cplx-div [[x y] [a b] tolerance]
+  (let [denom (+ (* a a) (* b b))
+        numx  (+ (* x a) (* y b))
+        numy  (- (* y a) (* x b))]
+    (if (< denom tolerance)
+      false
+      [(/ numx denom) (/ numy denom)])))
+
+(defn cplx-norm
+  "Compute the squared norm of a complex number, to avoid square roots"
+  [[x y]]
+  (+ (* x x) (* y y)))
+
 ;; TODO: try more formulas from http://www.lifesmith.com/formulas.html
   
 (def-algo Alg0001 "F(Z) = Z^2 + Z_0 (Mandelbrot)"
@@ -178,7 +194,27 @@
           (if (or (zero? ans) (< norm tolerance))
             ans
             (recur (dec ans) nx ny)))))))
-    
+
+(def-algo Alg0010 "F(Z) = Z - alpha*f(Z)/df(Z) (Newton/Numeric Derivative by step)"
+  [depth tolerance alpha f step]
+  (loop [ans (dec depth)
+         lx  x
+         ly  y]
+    (let [fz    (f lx ly)
+          stepz (f (+ lx step) (+ ly step))
+          dfz   (cplx-div (cplx-sub stepz fz)
+                          [step step]
+                          1E-10)
+          delta  (and dfz    (cplx-div fz dfz 1E-10))
+          scaled (and delta  (cplx-scale alpha delta))
+          nxtz   (and scaled (cplx-sub [lx ly] scaled))]
+      (if-not nxtz
+        0 ;; division by zero means it will never converge
+        (if (or (zero? ans)
+                (< (cplx-norm scaled) tolerance))
+          ans
+          (recur (dec ans) (nth nxtz 0) (nth nxtz 1)))))))
+                          
 (defn- split-into-ranges
   "splits `n` into `rsize`-sized ranges covering 0 to `n`"
   [n rsize]
