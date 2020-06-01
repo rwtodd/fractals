@@ -90,13 +90,17 @@
   [st]
   (let [[sx sy] (:image-size st)
         existing-img (:image st)
-        curns (find-ns 'org-rwtodd.fractals.core)]
+        curns (find-ns 'org-rwtodd.fractals.core)
+        eval-frac (or (:fractal st)
+                      (binding [*ns* curns]
+                        (eval (read-string (:in-fractal st)))))
+        eval-cols (or (:scheme st)
+                      (colors/vectorize-scheme
+                       (binding [*ns* curns]
+                         (eval (read-string (:in-scheme st))))))]
     (assoc st
-           :fractal (binding [*ns* curns]
-                      (eval (read-string (:in-fractal st))))
-           :scheme  (colors/vectorize-scheme
-                     (binding [*ns* curns]
-                       (eval (read-string (:in-scheme st)))))
+           :fractal eval-frac
+           :scheme  eval-cols
            :image   (if (and existing-img
                              (= (.getWidth existing-img) sx)
                              (= (.getHeight existing-img) sy))
@@ -195,12 +199,23 @@
         lbtn (JButton. "Alg List")
         abtn (JButton. "Apply")
         qbtn (JButton. "Quit")
+        doapply (fn []
+                  (let [astate @app-state
+                        afrac (.getText frac-txt)
+                        aschm (.getText scheme-txt)
+                        changed (concat
+                                 (if-not (= afrac
+                                            (:in-fractal astate))
+                                   [:in-fractal afrac :fractal nil])
+                                 (if-not (= aschm
+                                            (:in-scheme astate))
+                                   [:in-scheme aschm :scheme nil]))]
+                        (when (seq changed) (apply change-inputs! changed))))            
         handlers (reify ActionListener
                    (actionPerformed [_ ae]
                      (case (.getActionCommand ae)
                        "Alg List"  (algorithm-list-dialog st)
-                       "Apply"     (change-inputs! :in-fractal (.getText frac-txt)
-                                                   :in-scheme (.getText scheme-txt))
+                       "Apply"     (doapply)
                        "Quit"      (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
                        (println (.getActionCommand ae)))))]
     (.. dlg getContentPane (setLayout (BorderLayout.)))
