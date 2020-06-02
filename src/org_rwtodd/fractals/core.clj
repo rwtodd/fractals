@@ -25,7 +25,6 @@
 (def last-save-loc (let [node (.node (Preferences/userRoot) "org_rwtodd/fractals")]
                      (atom { :prefs node :value (.get node "LastDir" nil) })))
 
-
 (defn- update-save-loc!
   "Update the value of the save location from a provided JFileChooser, and save
   it to the preferences node if needed."
@@ -321,33 +320,40 @@
   [st]
   (let [dlg (JDialog. (:swing-frame st) "Image Export" true)
         inputs (Box. BoxLayout/PAGE_AXIS)
-        sz-txt (labelled-widget inputs "Export Size:" (JTextField. (pr-str (:image-size st))))
+        sz-txt (labelled-widget inputs
+                                "Export Size:"
+                                (JTextField. (pr-str (:image-size st))))
         btns (Box. BoxLayout/LINE_AXIS)
+        onebtn (JButton. "1x-Size")
+        twobtn (JButton. "2x-Size")
+        fourbtn (JButton. "4x-Size")
         ebtn (JButton. "Export")
         qbtn (JButton. "Quit")
         handlers (reify ActionListener
                    (actionPerformed [_ ae]
-                     (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
                      (case (.getActionCommand ae)
-                       "Export" (let [jfc (configure-file-chooser "png")]
-                                  (when (= JFileChooser/APPROVE_OPTION
-                                           (.showSaveDialog jfc (:swing-frame st)))
-                                    (save-image st (read-string (.getText sz-txt)) (ensure-extension (.getSelectedFile jfc) ".png"))
-                                    (update-save-loc! jfc)))
-                       "Quit"  nil
+                       "1x-Size" (.setText sz-txt (pr-str (:image-size st)))
+                       "2x-Size" (.setText sz-txt (pr-str (into [] (map #(* 2 %) (:image-size st)))))
+                       "4x-Size" (.setText sz-txt (pr-str (into [] (map #(* 4 %) (:image-size st)))))
+                       "Export"  (let [jfc (configure-file-chooser "png")]
+                                   (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
+                                   (when (= JFileChooser/APPROVE_OPTION
+                                            (.showSaveDialog jfc (:swing-frame st)))
+                                     (save-image st (read-string (.getText sz-txt)) (ensure-extension (.getSelectedFile jfc) ".png"))
+                                     (update-save-loc! jfc)))
+                       "Quit"   (.dispatchEvent dlg (WindowEvent. dlg WindowEvent/WINDOW_CLOSING))
                        (println (.getActionCommand ae)))))]
     (.. dlg getContentPane (setLayout (BorderLayout.)))
     (.setBorder inputs (BorderFactory/createEmptyBorder 5 5 5 5))
 
-    ;; setup the Apply Quit buttons
-    (.addActionListener ebtn handlers)
-    (.addActionListener qbtn handlers)
+    ;; setup the buttons
     (doto btns
       (.setBorder (BorderFactory/createEmptyBorder 5 5 5 5))
-      (.add (Box/createHorizontalGlue))
-      (.add ebtn)
-      (.add (Box/createRigidArea (Dimension. 5 0)))
-      (.add qbtn))
+      (.add (Box/createHorizontalGlue)))
+    (doseq [b [onebtn twobtn fourbtn ebtn qbtn]]
+      (.addActionListener b handlers)
+      (.add btns (Box/createRigidArea (Dimension. 5 0)))
+      (.add btns b))
 
     (doto dlg
       (.add btns BorderLayout/SOUTH)
@@ -361,15 +367,7 @@
   (let [mm (JMenu. "File")
         save (JMenuItem. "Save As")
         load (JMenuItem. "Load")
-        export (JMenuItem. "Export")
         quit   (JMenuItem. "Exit")
-        saveact (fn []
-                  (let [st @app-state
-                        jfc (configure-file-chooser "fract")]
-                    (when (= JFileChooser/APPROVE_OPTION
-                             (.showSaveDialog jfc (:swing-frame st)))
-                      (update-save-loc! jfc)
-                      (spit (ensure-extension (.getSelectedFile jfc) ".fract") (state-string st)))))
         loadact  (fn []
                    (let [frm (:swing-frame @app-state)
                          jfc (configure-file-chooser "fract")]
@@ -386,19 +384,16 @@
         listener  (reify ActionListener
                     (actionPerformed [_ ae]
                       (case (.getActionCommand ae)
-                        "Save As" (saveact)
+                        "Save As" (export-dialog @app-state)
                         "Load"    (loadact)
-                        "Export"  (export-dialog @app-state)
                         "Exit"    (.dispatchEvent frm (WindowEvent. frm WindowEvent/WINDOW_CLOSING))                        
                         nil)))]
     (.addActionListener save listener)
     (.addActionListener load listener)
-    (.addActionListener export listener)
     (.addActionListener quit  listener)
     (doto mm
       (.add save)
       (.add load)
-      (.add export)
       (.add (JSeparator.))
       (.add quit))))
     
