@@ -12,6 +12,12 @@
   (depth [_] (count v))
   (get-color [_ x] (nth v x)))
 
+(def ega-colors
+  "The EGA 16-Color Palette"
+  (->VectorColorScheme
+   [0x0 0xaa 0xaa00 0xaaaa 0xaa0000 0xaa00aa 0xaa5500 0xaaaaaa
+    0x555555 0x5555ff 0x55ff55 0x55ffff 0xff5555 0xff55ff 0xffff55 0xffffff]))
+
 (defn- to-rgb
   "Convert Colors to RGB values, or leave it alone if it's an integer already."
   [c]
