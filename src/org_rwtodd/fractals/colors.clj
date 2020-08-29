@@ -1,22 +1,12 @@
 (ns org-rwtodd.fractals.colors
+  (:refer-clojure :exclude [concat])
   (:import (java.awt Color))
   (:gen-class))
 
-(defprotocol ColorScheme
-  (depth [cs])
-  (get-color [cs x]))
-
-;; VectorColorSchemes should always have rgb values, *not* Colors
-(deftype VectorColorScheme [v]
-  ColorScheme
-  (depth [_] (count v))
-  (get-color [_ x] (nth v x)))
-
 (def ega-colors
   "The EGA 16-Color Palette"
-  (->VectorColorScheme
-   [0x0 0xaa 0xaa00 0xaaaa 0xaa0000 0xaa00aa 0xaa5500 0xaaaaaa
-    0x555555 0x5555ff 0x55ff55 0x55ffff 0xff5555 0xff55ff 0xffff55 0xffffff]))
+  [0x0 0xaa 0xaa00 0xaaaa 0xaa0000 0xaa00aa 0xaa5500 0xaaaaaa
+   0x555555 0x5555ff 0x55ff55 0x55ffff 0xff5555 0xff55ff 0xffff55 0xffffff])
 
 (defn- to-rgb
   "Convert Colors to RGB values, or leave it alone if it's an integer already."
@@ -32,20 +22,10 @@
     (Color. c)
     c))
 
-(defn vectorize-scheme
+(defn scheme-to-rgb
   "Convert any `ColorScheme` into an optimized vector-based scheme via enumeration"
   [cs]
-  (if (instance? VectorColorScheme cs)
-    cs
-    (->VectorColorScheme
-     (into []
-           (map (comp to-rgb (partial get-color cs)))
-           (range (depth cs))))))
-
-(deftype FnColorScheme [max f]
-  ColorScheme
-  (depth [cs] max)
-  (get-color [cs x] (f x)))
+  (into [] (map to-rgb) cs))
 
 (defn- single-gradient-scheme
   "Create a `ColorScheme` by gradually transitioning
@@ -59,14 +39,13 @@
         gdiff   (- (.getGreen b) g0)
         bdiff   (- (.getBlue b) b0)
         divisor (dec n)]
-    (FnColorScheme.
-     n
-     (fn [x] (let [amt (/ x divisor)]
-               (Color. (int (+ r0 (* amt rdiff)))
-                       (int (+ g0 (* amt gdiff)))
-                       (int (+ b0 (* amt bdiff)))))))))
+    (map (fn [x] (let [amt (/ x divisor)]
+                   (Color. (int (+ r0 (* amt rdiff)))
+                           (int (+ g0 (* amt gdiff)))
+                           (int (+ b0 (* amt bdiff))))))
+         (range n))))
 
-(defn gray-scheme
+(defn- gray-scheme
   "Create a `ColorScheme` which is `max` levels of gray
   (from 0 to max-1)."
   [max]
@@ -83,53 +62,29 @@
   into single-entry `ColorScheme`s."
   [s]
   (cond
-    (satisfies? ColorScheme s) s
-    (integer? s) (->VectorColorScheme [s])
-    (instance? Color s) (->VectorColorScheme [(.getRGB s)])
+    (seq? s)            s
+    (integer? s)        [(Color. s)]
+    (instance? Color s) [s]
     :else  (throw (IllegalArgumentException. (str "Can't convert " s " to a colorscheme!")))))
 
-(defn combine-schemes
+(defn concat
   "combines a series of `ColorScheme` objects by concatenating their
   ranges"
-  ([a] (to-scheme a))
-  ([a b]
-   (let [a     (to-scheme a)
-         b     (to-scheme b)
-         mxa   (depth a)
-         total (+ mxa (depth b))]
-     (->FnColorScheme
-      total
-      (fn [x] (if (< x mxa)
-                (get-color a x)
-                (get-color b (- x mxa)))))))
-  ([a b & more]
-   (reduce combine-schemes (combine-schemes a b) more)))
+  [& schemes] (mapcat to-scheme schemes))
 
-(defn- skip-first-scheme
-  "Create a derived `ColorScheme` that skips the first entry in the given scheme. This should
-  be mainly useful in constructing multi-part gradients, since you don't want the first element
-  of the next gradient to match the last element of the current one."
-  [cs]
-  (->FnColorScheme
-   (dec (depth cs)) 
-   (fn [x] (get-color cs (inc x)))))
-    
-(defn gradient-scheme
+(defn gradient
   "Define a `ColorScheme` that interpolates across many colors. If only one color is
   given, then transition from BLACK to the color."
-  ([n color]
-   (monochrome-scheme n (to-color color)))
-  
+  ([n] (gray-scheme n))
+  ([n color] (monochrome-scheme n (to-color color)))
   ([n color-a & colors]
-   (let [grads    (partition 2 1 (map to-color (cons color-a colors)))
-         gradcnt  (count grads)
-         wrappers (cons identity (repeat skip-first-scheme))
-         per      (int (/ n gradcnt))
-         sizes    (cons (- n (* (dec gradcnt) per))
-                        (repeat (inc per)))]
-     (apply combine-schemes
-            (map (fn [[color-1 color-2] size wrapper]
-                   (wrapper (single-gradient-scheme size color-1 color-2)))
-                 grads
-                 sizes
-                 wrappers)))))
+   (let [per      (int (/ n (count colors)))
+         first-seq (single-gradient-scheme (- n (* (dec (count colors)) per))
+                                           (to-color color-a)
+                                           (to-color (first colors)))
+         grads    (->> colors
+                       (map to-color)
+                       (partition 2 1)
+                       (map (fn [[c1 c2]] (single-gradient-scheme (inc per) c1 c2)))
+                       rest)]
+     (apply clojure.core/concat first-seq grads))))

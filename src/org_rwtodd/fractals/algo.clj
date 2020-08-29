@@ -1,6 +1,5 @@
 (ns org-rwtodd.fractals.algo
   (:import [java.awt.image BufferedImage])
-  (:require [org-rwtodd.fractals.colors :as colors])
   (:gen-class))
 
 (definterface Algorithm
@@ -232,7 +231,7 @@
         ymax (.getHeight img)
         x-scale (/ (- algx-max algx-min) xmax)
         y-scale (/ (- algy-max algy-min) ymax)
-        color-scale (/ (colors/depth scheme) (.fidelity alg))]
+        color-scale (/ (count scheme) (.fidelity alg))]
     (dorun
      (pmap (fn [yrange]
              (doseq [y yrange,  x (range xmax)]
@@ -240,7 +239,7 @@
                      algy  (+ algy-min (* y y-scale))
                      ptval (.point alg algx algy)
                      scaled (int (*  ptval color-scale))]
-                 (.setRGB img x y (colors/get-color scheme scaled)))))
+                 (.setRGB img x y (nth scheme scaled)))))
            (split-into-ranges ymax 50)))
     img))
 

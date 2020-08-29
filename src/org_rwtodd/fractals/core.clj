@@ -72,8 +72,7 @@
   {
    :in-fractal "(algo/->Alg0001 32 4.0)"
    :in-scheme
- "(colors/combine-schemes 0
-                         (colors/gradient-scheme 255 0xff0000 0xddff00 0x0000ff))"
+ "(colors/concat 0 (colors/gradient 255 0xff0000 0xddff00 0x0000ff))"
    :center [-0.5 0.0]
    :size [1.366 0.768]
    :image-size [683 384]
@@ -94,7 +93,7 @@
                       (binding [*ns* curns]
                         (eval (read-string (:in-fractal st)))))
         eval-cols (or (:scheme st)
-                      (colors/vectorize-scheme
+                      (colors/scheme-to-rgb
                        (binding [*ns* curns]
                          (eval (read-string (:in-scheme st))))))]
     (assoc st
