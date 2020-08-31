@@ -23,12 +23,12 @@
     c))
 
 (defn scheme-to-rgb
-  "Convert any `ColorScheme` into an optimized vector-based scheme via enumeration"
+  "Convert any sequence of colors into an optimized vector-based scheme via enumeration"
   [cs]
   (into [] (map to-rgb) cs))
 
 (defn- single-gradient-scheme
-  "Create a `ColorScheme` by gradually transitioning
+  "Create a color sequence by gradually transitioning
   from colors `a` to `b`, in `n` steps. No fancy models,
   just interpolate the R,G,B values."
   [n a b]
@@ -46,35 +46,36 @@
          (range n))))
 
 (defn- gray-scheme
-  "Create a `ColorScheme` which is `max` levels of gray
+  "Create a color sequence which is `max` levels of gray
   (from 0 to max-1)."
   [max]
   (single-gradient-scheme max Color/BLACK Color/WHITE))
 
 (defn- monochrome-scheme
-  "Create a `ColorScheme` which is `max` levels which
+  "Create a color sequence which is `max` levels which
   proceed from black to the given color `c`"
   [max c]
   (single-gradient-scheme max Color/BLACK c))
 
 (defn- to-scheme
-  "Leaves `ColorScheme`s alone, and converts single integers-or-colors
-  into single-entry `ColorScheme`s."
+  "Leaves sequences alone, and converts single integers-or-colors
+  into single-entry sequences"
   [s]
   (cond
     (seq? s)            s
     (integer? s)        [(Color. s)]
     (instance? Color s) [s]
-    :else  (throw (IllegalArgumentException. (str "Can't convert " s " to a colorscheme!")))))
+    :else  (throw (IllegalArgumentException. (str "Can't convert " s " to a color sequence!")))))
 
 (defn concat
-  "combines a series of `ColorScheme` objects by concatenating their
+  "combines a series of color sequences by concatenating their
   ranges"
   [& schemes] (mapcat to-scheme schemes))
 
 (defn gradient
-  "Define a `ColorScheme` that interpolates across many colors. If only one color is
-  given, then transition from BLACK to the color."
+  "Define a color sequence that interpolates across many colors. If only one color is
+  given, then transition from BLACK to the color. If no colors are given, a gray sequence
+  is created."
   ([n] (gray-scheme n))
   ([n color] (monochrome-scheme n (to-color color)))
   ([n color-a & colors]
