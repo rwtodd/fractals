@@ -1,3 +1,7 @@
 ;; deps.edn
 { :paths ["src" "resources"]
- :deps {org.clojure/clojure {:mvn/version "1.10.3"}}}
+ :deps {org.clojure/clojure {:mvn/version "1.10.3"}}
+ :aliases {
+    :fractals
+    {:jvm-opts ["-Dswing.defaultlaf=javax.swing.plaf.metal.MetalLookAndFeel" "-Dswing.metalTheme=steel"]
+     :main-opts ["-m" "org-rwtodd.fractals.core"]}}}
